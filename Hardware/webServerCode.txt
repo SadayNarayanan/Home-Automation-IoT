@@ -1,0 +1,547 @@
+
+
+// Import required libraries
+#include "WiFi.h"
+#include "ESPAsyncWebServer.h"
+#include <SoftwareSerial.h>
+
+// Replace with your network credentials
+const char* ssid = "Rose";
+const char* password = "12345678";
+
+
+SoftwareSerial mySerial(16, 17);   // Esp 32
+
+
+
+//----------------------String Variables--------------------------------
+String newString = "";
+
+//Variable Declaration for Status of Switches--------------------------------------------------------------------------------
+int varRoom1Light=500;
+int varRoom1Fan=600;
+int varOutdoorLight=700;
+int varGateLight= 808;
+int varPanicAlarm=900;
+
+//----------------------------end-------------------------
+
+// ------------------------------------ RX Global Variables---------------------------
+int cpuValue = 0;
+String motion_statusString = "0";
+String LDR_statusString = "0";
+String reed_statusString = "0";
+int motion_status = 0;
+int LDR_status = 0;
+int reed_status = 0;
+String strArr[3]; //Set the size of the array to equal the number of values you will be receiveing.
+
+//------------------------------------End of RX Global Variables------------------------------
+
+//------------------------------------TX Global Variables ------------------------------------
+String st1;
+
+//-------------------------------------End of TX Global Variables-----------------------------
+
+
+
+
+
+// ------------------------------Create AsyncWebServer object on port 80------------------------------
+AsyncWebServer server(80);
+
+//--------------------------- -----------------------------------------------------------Serial Communication---------------------------------------------------------------------------
+/* 
+ *  -----------------------------------------------------------------------RX Side---------------------------------------------------
+ */
+
+void rxRecieveData(){
+
+  String rxString = "";
+ 
+    if (mySerial.available()) {
+        motion_statusString = "";
+
+        //Keep looping until there is something in the buffer.
+        while (mySerial.available()) {
+            //Delay to allow byte to arrive in input buffer.
+            delay(2);
+            //Read a single character from the buffer.
+            char ch = mySerial.read();
+            //Append that single character to a string.
+            rxString += ch;
+        }
+
+        int stringStart = 0;
+        int arrayIndex = 0;
+
+        for (int i = 0; i  < rxString.length(); i++) {
+            //Get character and check if it's our "special" character.
+            if (rxString.charAt(i) == '%') {
+                //Clear previous values from array.
+                strArr[arrayIndex] = "";
+
+                //Save substring into array.
+                strArr[arrayIndex] = rxString.substring(stringStart, i);
+                //Set new string starting point.
+                stringStart = (i + 1);
+                arrayIndex++;
+            }
+        }
+  
+}
+
+  //----------------------------------- Test-----------------------
+
+  Serial.print("Recieved Data : ");
+  Serial.println(rxString);
+
+  //------------------------------------
+
+}
+
+
+
+
+void rxProcessData(){
+          //Put values from the array into the variables.
+        motion_statusString = strArr[0];
+        LDR_statusString = strArr[1];
+        reed_statusString = strArr[2];
+
+        //Convert string to int.
+        motion_status = motion_statusString.toInt();
+        LDR_status = LDR_statusString.toInt();
+        reed_status = reed_statusString.toInt();
+
+}
+
+
+/* 
+ *  -----------------------------------------------------------------------End of RX Side---------------------------------------------------
+ */
+
+ /*
+  * ------------------------------------------------------------------------TX Side------------------------------------------------------------
+  */
+  void txSendData(){
+      int a = varRoom1Light;
+      int b = varRoom1Fan;
+      int c = varOutdoorLight;
+      int d = varGateLight;
+      int e = varPanicAlarm;
+      int f = motion_status;
+      int g = LDR_status;
+      int h = reed_status;
+
+      newString = String(a);
+      newString += "%";
+      newString += String(b);
+      newString += "%";
+      newString += String(c);
+      newString += "%";
+      newString += String(d);
+      newString += "%";
+      newString += String(e);
+      newString += "%";
+      newString += String(f);
+      newString += "%";
+      newString += String(g);
+      newString += "%";
+      newString += String(h);
+      newString += "%";
+      
+      st1 = String(a);
+      st1 += "%";
+      st1 += String(b);
+      st1 += "%";
+      st1 += String(c);
+      st1 += "%";
+      st1 += String(d);
+      st1 += "%";
+      st1 += String(e);
+/*    no need to send it again to Arduino since data is obtained from arduino
+ *    st1 += "%";
+      st1 += String(f);
+      st1 += "%";
+      st1 += String(g);
+      st1 += "%";
+      st1 += String(h);
+*/
+    
+      mySerial.println(st1);
+      //----------------------------------
+      Serial.print("Sent Data: ");
+      Serial.println(st1);
+      Serial.print("Data To UI: ");
+      Serial.println(newString);
+
+}
+
+/*
+ * ---------------------------------------------------------------------End of TX Side --------------------------------------------------------------
+ */
+
+//--------------------------------------End of Serial Communication-----------------------------------------------------------------------------------------
+
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+  <style>
+    html {
+     font-family: Arial;
+     display: inline-block;
+     margin: 0px auto;
+     text-align: center;
+    }
+    h1 { font-size: 10.0rem; }
+    h2 { font-size: 7.0rem; }
+    h3 { font-size: 5.0rem; }
+    h4 { font-size: 3.0rem; }
+    p  { font-size: 2.0rem; }
+    header {
+      background-color: #666;
+      padding: 30px;
+      text-align: center;
+      font-size: 35px;
+      color: white;
+     }
+   .notif-area {
+      padding: 20px;
+      background-color: #f1f1f1;
+     }
+  </style>
+</head>
+    <body>
+        <header> <h1>MY SMART HOME </h1> </header>
+        <div class="container">
+           <div class="row notif-area">
+                <div class="col col-lg-4">
+                    <h4>SWITCH CONTROL</h4> <br/>
+                    <p>Room 1 Light <button type="button" class="btn btn-warning" onclick='SW("/A");'> ON </button><button type="button" class="btn btn-warning" onclick='SW("/B");'> OFF </button></p>
+                    <p>Room 1 Fan <button type="button" class="btn btn-warning" onclick='SW("/C");'> ON </button><button type="button" class="btn btn-warning" onclick='SW("/D");'> OFF </button></p>
+                    <p>Outdoor Light <button type="button" class="btn btn-warning" onclick='SW("/E");'> ON </button><button type="button" class="btn btn-warning" onclick='SW("/F");'> OFF </button></p>
+                    <p>Gate Light <button type="button" class="btn btn-warning" onclick='SW("/G");'> ON </button><button type="button" class="btn btn-warning" onclick='SW("/H");'> OFF </button><button type="button" class="btn btn-warning" onclick='SW("/I");'> AUTO </button></p>
+                </div>
+                <div class="col col-lg-4"> 
+                    <h4>SWITCH STATUS </h4> <br/>                    
+                    <p>Room 1 Light : <i id="room-1-light-status"></i></p>
+                    <p>Room 1 Fan :  <i id="room-1-fan-status"></i></p>
+                    <p>Outdoor Light :  <i id="outdoor-light-status"></i></p>
+                    <p>Gate Light : <i id="gate-light-status"></i></p>
+                    <p>Panic Alarm : <i id="panic-alarm-status"></i></p>
+                </div>
+                <div class="col col-lg-4"> 
+                    <h4>SENSOR STATUS </h4> <br/>                    
+                    <p>Motion Sensor : <i id="motion-sensor-status"></i></p>
+                    <p>Natural Light :  <i id="LDR-sensor-status"></i></p>
+                    <p>Gate Status :  <i id="gate-status"></i></p>
+               </div>
+          </div>
+          <div class="row">
+                <h4>MOTION CAMERA</h4>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <img id="motion-cam" class="img img-responsive" > </img>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col col-lg-4">
+                  <h4>Panic Alarm <div id="panic-on-sw" ><button type="button" class="btn btn-warning" onclick='SW("/J");'> ON </button> </div> <div id="panic-off-sw">  <button type="button" class="btn btn-warning" onclick='SW("/K");'> OFF </button> </div> </h4>
+                </div>
+            </div>
+        </div>
+    
+    </body>
+<script>
+                var myString;
+                var splitStr;
+                var UIComponentsArray;
+                var globalStatus = "0 0 0 0 0 0 0 0";
+    
+    
+    
+    
+                var SW = function(inKey){
+                  var xhr = new XMLHttpRequest();
+                      xhr.open('GET', inKey, true);
+                      var outMsg = xhr.send();
+                      console.log(outMsg);
+                  }
+
+    
+                
+                
+                var getValues = function() {
+                      var xhttp = new XMLHttpRequest();
+                      xhttp.onreadystatechange = function() {
+                        if(this.readyState == 4 && this.status == 200) {
+                          globalStatus = this.responseText;
+                        }
+                      };
+                      xhttp.open("GET", "/state", true);
+                      xhttp.send();
+                };
+
+                var setUIComponents = function() {
+                    if(UIComponentsArray[0]==500) {
+                        document.getElementById("room-1-light-status").textContent = "OFF";
+                    }
+                    else if(UIComponentsArray[0]==505) {
+                        document.getElementById("room-1-light-status").textContent = "ON";
+                    }
+                    else {
+                        document.getElementById("room-1-light-status").textContent = "Status Not Available";
+                    }
+                    if(UIComponentsArray[1]==600) {
+                        document.getElementById("room-1-fan-status").textContent = "OFF";
+                    }
+                    else if(UIComponentsArray[1]==605) {
+                        document.getElementById("room-1-fan-status").textContent = "ON";
+                    }
+                    else {
+                        document.getElementById("room-1-fan-status").textContent = "Status Not Available";
+                    }
+                    if(UIComponentsArray[2]==700) {
+                        document.getElementById("outdoor-light-status").textContent = "OFF";
+                    }
+                    else if(UIComponentsArray[2]==705) {
+                        document.getElementById("outdoor-light-status").textContent = "ON";
+                    }
+                    else {
+                        document.getElementById("outdoor-light-status").textContent = "Status Not Available";
+                    }
+                    if(UIComponentsArray[3]==800) {
+                        document.getElementById("gate-light-status").textContent = "OFF";
+                    }
+                    else if(UIComponentsArray[3]==805) {
+                        document.getElementById("gate-light-status").textContent = "ON";
+                    }
+                    else if(UIComponentsArray[3]==808) {
+                        document.getElementById("gate-light-status").textContent = "Automatic Mode";
+                    }
+                    else {
+                        document.getElementById("gate-light-status").textContent = "Status Not Available";
+                    }
+                    if(UIComponentsArray[4]==900) {
+                        document.getElementById("panic-alarm-status").textContent = "OFF";
+                        document.getElementById("panic-on-sw").style.display = "block";
+                        document.getElementById("panic-off-sw").style.display = "none";
+                    }
+                    else if(UIComponentsArray[4]==905) {
+                        document.getElementById("panic-alarm-status").textContent = "ON";
+                        document.getElementById("panic-on-sw").style.display = "none";
+                        document.getElementById("panic-off-sw").style.display = "block";
+                    }
+                    else {
+                        document.getElementById("panic-alarm-status").textContent = "Status Not Available";
+                        document.getElementById("panic-on-sw").style.display = "block";
+                        document.getElementById("panic-off-sw").style.display = "block";
+                    }
+                    if(UIComponentsArray[5]==100) {
+                        document.getElementById("motion-sensor-status").textContent = "NORMAL";
+                    }
+                    else if(UIComponentsArray[5]==105) {
+                        document.getElementById("motion-sensor-status").textContent = "MOTION DETECTED";
+                    }
+                    else {
+                        document.getElementById("motion-sensor-status").textContent = "Status Not Available";
+                    }
+                    if(UIComponentsArray[6]==200) {
+                        document.getElementById("LDR-sensor-status").textContent = "NORMAL LIGHT";
+                    }
+                    else if(UIComponentsArray[6]==205) {
+                        document.getElementById("LDR-sensor-status").textContent = "LOW LIGHT";
+                    }
+                    else {
+                        document.getElementById("LDR-sensor-status").textContent = "Status Not Available";
+                    }
+                    if(UIComponentsArray[7]==305) {
+                        document.getElementById("gate-status").textContent = "GATE CLOSED";
+                    }
+                    else if(UIComponentsArray[7]==300) {
+                        document.getElementById("gate-status").textContent = "GATE OPEN";
+                    }
+                    else {
+                        document.getElementById("gate-status").textContent = "Status Not Available";
+                    }
+                };
+
+    
+
+                
+                setInterval(getValues, 1500);
+                setInterval(setUIComponents,1500);
+    //            setInterval(function(){
+                  //console.log("executing");  --------------Testing----------------------
+                  //console.log(globalStatus);
+     //           }, 5000 );
+
+
+                setInterval(function(){
+                    loadImageOfMotion();
+                    var stringProcess = function(){
+                    var myValues = globalStatus;
+                    console.log(myValues);
+                    var splitPart = myValues.split("%");
+                    UIComponentsArray = splitPart;
+
+                    //--------------Debugging-----------------
+
+
+
+                    console.log(splitPart);
+
+
+
+                }();
+                }, 1500);
+
+              var loadImageOfMotion = function(){
+                document.getElementById("motion-cam").src="http://192.168.43.102/saved-photo";
+                console.log("Img Executed");
+                };
+
+
+</script>
+</html>)rawliteral";
+
+
+
+
+//-------------------------------------------------Setup - Initialization----------------------------------------
+
+//----------
+// Set your Static IP address
+IPAddress local_IP(192, 168, 43, 101);
+// Set your Gateway IP address
+IPAddress gateway(192, 168, 43, 1);
+
+IPAddress subnet(255, 255, 0, 0);
+IPAddress primaryDNS(8, 8, 8, 8);   //optional
+IPAddress secondaryDNS(8, 8, 4, 4); //optional
+
+//-----------
+void setup(){
+  // Serial port for debugging purposes
+  Serial.begin(115200);
+//---------------
+// Configures static IP address
+  if (!WiFi.config(local_IP, gateway, subnet)) {
+    Serial.println("Failed to configure");
+  }
+  
+//------------  
+  // Configures static IP address
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
+    Serial.println("STA Failed to configure");
+  }
+  
+  // Connect to Wi-Fi network with SSID and password
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  // Print local IP address and start web server
+  Serial.println("");
+  Serial.println("WiFi connected.");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  server.begin();
+
+  
+
+  // Route for root / web page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html);
+  });
+
+  server.on("/state", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", newString.c_str());
+  });
+    server.on("/A", HTTP_GET, [](AsyncWebServerRequest *request){
+      varRoom1Light=505;
+    request->send_P(200, "text/plain", "Room1 L On");
+  });
+    server.on("/B", HTTP_GET, [](AsyncWebServerRequest *request){
+      varRoom1Light=500;
+    request->send_P(200, "text/plain", "Room1 L Off");
+  });
+    server.on("/C", HTTP_GET, [](AsyncWebServerRequest *request){
+      varRoom1Fan=605;
+    request->send_P(200, "text/plain", "Room1 F On");
+  });
+    server.on("/D", HTTP_GET, [](AsyncWebServerRequest *request){
+      varRoom1Fan=600;
+    request->send_P(200, "text/plain", "Room1 F Off" );
+  });
+    server.on("/E", HTTP_GET, [](AsyncWebServerRequest *request){
+      varOutdoorLight=705;
+    request->send_P(200, "text/plain", "Out L On");
+  });
+    server.on("/F", HTTP_GET, [](AsyncWebServerRequest *request){
+      varOutdoorLight=700;
+    request->send_P(200, "text/plain", "Out L Off");
+  });
+    server.on("/G", HTTP_GET, [](AsyncWebServerRequest *request){
+      varGateLight=805;
+    request->send_P(200, "text/plain", "Gate L On");
+  });
+    server.on("/H", HTTP_GET, [](AsyncWebServerRequest *request){
+      varGateLight=800;
+    request->send_P(200, "text/plain", "Gate L Off");
+  });
+    server.on("/I", HTTP_GET, [](AsyncWebServerRequest *request){
+      varGateLight= 808;
+    request->send_P(200, "text/plain", "Gate L Auto");
+  });
+    server.on("/J", HTTP_GET, [](AsyncWebServerRequest *request){
+      varPanicAlarm=905;
+    request->send_P(200, "text/plain", "Panic Alarm On");
+  });
+    server.on("/K", HTTP_GET, [](AsyncWebServerRequest *request){
+      varPanicAlarm=900;
+    request->send_P(200, "text/plain", "Panic Alarm Off");
+  });
+  
+
+    mySerial.begin(9600);
+    Serial.println("Ready to display.");
+
+
+  // Start server
+  //server.begin();
+}
+
+
+
+//--------------------------------------Loop-----------------------------------------------------------
+
+
+void loop(){
+//-----------------------------------------------RX Side-------------------------------
+rxRecieveData();
+rxProcessData();
+Serial.println(motion_status);
+//--------------------------------------------------TX Side----------------------------------
+txSendData();
+
+
+
+//-------------------------------------General---------------------
+delay(1000);  
+
+
+}
+
+//----------------------------------------------------End of Loop---------------------------------

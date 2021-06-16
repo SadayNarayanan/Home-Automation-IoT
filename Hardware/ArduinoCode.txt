@@ -1,0 +1,340 @@
+#include <SoftwareSerial.h>
+
+
+//---------------------------------------------------------------------------------------------------------------Variable Declaration----------------------------------------------------------------------------------------------------------
+
+//---------------------------------------Serial Communication Variables & Definitions-----------------------
+SoftwareSerial mySerial(10, 11); //Arduino
+
+
+
+
+//-----------------------------------------------------------------------------Communication Variables------------------------------------------------------------
+
+//----------------------------------TX Global Variables------------------------------------------
+String sensorValueString;
+
+
+
+// ------------------------------------ RX Global Variables---------------------------
+
+String room1LightString = "500";
+String room1FanString = "600";
+String outdoorLightString = "700";
+String gateLightString = "808";
+String panicAlarmString = "900";
+String strArr[5]; //Set the size of the array to equal the number of values you will be receiveing.
+int room1LightValue = 500;      //500 off, 505 on
+int room1FanValue = 600;        //600 off, 605 on
+int outdoorLightValue = 700;    //700 off, 705 on
+int gateLightValue = 808;     //800 off, 805 on, 808 Auto: Default
+int panicAlarmValue = 900;      //900 off, 905 on
+
+
+//------------------------------------End of RX Global Variables------------------------------
+
+//--------------------------------------------------------------------------End of Communication Line-------------------------------------------------------------
+
+
+//--------------------------------------------------------------------------------General Variables---------------------------------------------------------------
+
+
+//---------------------------------PIR Sensor----------------------
+
+int PIR_sensor = A5;              // the pin that the sensor is atteched to
+int state = LOW;             // by default, no motion detected
+int val = 0;                 // variable to store the sensor status (value)
+int motionStatus = 100;
+//-------------------------------LDR-------------------------------
+int LDR_sensor = A6;
+unsigned int LDR_value = 0;
+int LDR_status = 200;
+
+
+//------------------------------------Reed-------------------------
+int reed_sensor = A7;
+unsigned int reed_value = 0;
+int reed_status = 300;
+
+//---------------------Switching - Output - Pin Definitions--------------------------
+
+int room1LightPin = 6;
+int room1FanPin = 7;
+int outdoorLightPin = 8;
+int gateLightPin = 9;
+int panicAlarmPin = 12;
+const int motionCamTrigger = A2;
+
+//---------------------------End of Pin Definition-----------------------------------
+
+
+
+//---------------------------------------------------------------------------End of General Variables-----------------------------------------------------------
+
+
+
+
+//---------------------------------------------------------------------------------------------------------------Setup - Initialization---------------------------------------------------------------------------------------------------------
+
+void setup() {
+    //-----------------------------------------------Communication-------------------------------------------------
+    Serial.begin(115200); //Initialize Serial Communication Via USB
+    mySerial.begin(9600); //Initialize Serial Communication between 2 Devices
+    Serial.println("Ready to display.");
+    //--------------------------------------------End of Communication--------------------------------------------
+    
+    
+    pinMode(room1LightPin, OUTPUT);
+    pinMode(room1FanPin, OUTPUT);
+    pinMode(outdoorLightPin, OUTPUT);
+    pinMode(gateLightPin, OUTPUT);
+    pinMode(panicAlarmPin, OUTPUT);
+    
+
+}
+
+void loop() {
+    //-------------------------------------------------------------code here run repeatedly------------------------------------------------------------------------------------------------
+    //-----------------------------------------------TX Side -------------------------------------------------------
+    txSendData();
+    
+    //-----------------------------------------------RX Side--------------------------------------------------------
+    rxRecieveData();
+    rxProcessData();
+    
+    delay(1000);
+    
+    //------------------------------------------------General-------------------------------------------------------
+    
+    pirReading();
+    ldrReading();
+    reedReading();
+    deploySwiitching();
+    
+    
+    
+    //---------------------------------Debugging----------------------------
+    //Serial.println(room1LightValue);
+    //Serial.println(room1FanValue);
+    //Serial.println(outdoorLightValue);
+    //Serial.println(gateLightValue);
+    //Serial.println(panicAlarmValue);
+    //-----------------------------------end--------------------------------
+    
+    //------------------------------------------------------------------End Of Loop--------------------------------------------------------------------------------------------------------
+}
+
+
+/*
+ * 
+ * s----------------------------------------------------------------Custom Functions------------------------------------------------------------------------------------------------
+ * 
+ */
+
+//----------------------------------------------TX Side-----------------------------------------------------
+void txSendData(){
+    int a = motionStatus;
+    int b = LDR_status;
+    int c = reed_status;
+    sensorValueString = String(a);
+    sensorValueString += "%";
+    sensorValueString += String(b);
+    sensorValueString += "%";
+    sensorValueString += String(c);
+    sensorValueString += "%";
+  
+    
+    mySerial.println(sensorValueString);
+  
+    //----------------Serial Test - For Debugging----------------------
+    Serial.print("Sent Data : ");
+    Serial.println(sensorValueString);
+    //--------------------------end------------------------------------
+}
+
+//--------------------------------------------End of TX Side------------------------------------------------
+
+
+/* 
+ *  -----------------------------------------------------------------------RX Side---------------------------------------------------
+ */
+
+void rxRecieveData(){
+
+    String rxString = "";
+   
+      if (mySerial.available()) {
+          room1LightString = "";
+  
+          //Keep looping until there is something in the buffer.
+          while (mySerial.available()) {
+              //Delay to allow byte to arrive in input buffer.
+              delay(2);
+              //Read a single character from the buffer.
+              char ch = mySerial.read();
+              //Append that single character to a string.
+              rxString += ch;
+          }
+  
+          int stringStart = 0;
+          int arrayIndex = 0;
+  
+          for (int i = 0; i  < rxString.length(); i++) {
+              //Get character and check if it's our "special" character.
+              if (rxString.charAt(i) == '%') {
+                  //Clear previous values from array.
+                  strArr[arrayIndex] = "";
+  
+                  //Save substring into array.
+                  strArr[arrayIndex] = rxString.substring(stringStart, i);
+                  //Set new string starting point.
+                  stringStart = (i + 1);
+                  arrayIndex++;
+              }
+          }
+    
+  } 
+  //--------------Serial Test - for Debogging ---------------------------------
+  
+          Serial.print("Received Data : ");
+          Serial.println(rxString);
+  
+  //--------------------------end----------------------------------------------
+
+}
+
+
+
+
+void rxProcessData(){
+        //Put values from the array into the variables.
+        room1LightString = strArr[0];
+        room1FanString = strArr[1];
+        outdoorLightString = strArr[2];
+        gateLightString = strArr[3];
+        panicAlarmString = strArr[4];
+
+        //Convert string to int.
+        room1LightValue = room1LightString.toInt();
+        room1FanValue = room1FanString.toInt();
+        outdoorLightValue = outdoorLightString.toInt();
+        gateLightValue = gateLightString.toInt();
+        panicAlarmValue = panicAlarmString.toInt();
+}
+
+
+/* 
+ *  -----------------------------------------------------------------------End of RX Side--------------------------------------------------- 
+ */
+
+
+//------------------------------------------------------------------------Sensor Readings------------------------------------------------------------------------------------
+
+
+ //---------------------------------------------PIR Processing-----------------------------------
+ 
+ void pirReading(){
+     val = digitalRead(PIR_sensor);   // read sensor value
+      if (val == HIGH) {           // check if the sensor is HIGH
+        // digitalWrite(led, HIGH);   // turn LED ON
+        motionStatus = 105;
+        digitalWrite(motionCamTrigger, HIGH);
+        delay(100);                // delay 100 milliseconds 
+        
+        if (state == LOW) {
+          Serial.println("Motion detected!"); 
+          state = HIGH;       // update variable state to HIGH
+          
+        }
+      } 
+      else {
+          // digitalWrite(led, LOW); // turn LED OFF
+          motionStatus = 100;
+          digitalWrite(motionCamTrigger, LOW);
+          delay(200);             // delay 200 milliseconds 
+          
+          if (state == HIGH){
+            Serial.println("Motion stopped!");
+            state = LOW;       // update variable state to LOW
+        }
+      }
+      //Serial.println(motionStatus); //For Debugging
+ }
+
+//---------------------------------------------LDR Sensor Value ----------------------------------
+
+ void ldrReading(){
+      LDR_value = analogRead(LDR_sensor);
+       //delay(1000);
+  
+      if (LDR_value > 400){
+          LDR_status = 205;
+        } else {
+          LDR_status = 200;
+          }
+  
+      //Serial.println(LDR_status); //For Debugging
+ }
+
+
+//----------------------------------------------Reed Switch Readings------------------------------
+
+ void reedReading(){
+    reed_value = analogRead(reed_sensor);
+    
+    if (reed_value > 300){
+        reed_status = 305;
+      } else {
+        reed_status = 300;
+        }
+    //Serial.println(reed_status); //For Debugging
+ }
+
+
+//-------------------------------------------------------------------------End of Sensor Readings----------------------------------------------------------------------
+
+
+//--------------------------------------------Control the Switches --------------------------------
+  int deploySwiitching(){
+    int status = 405; 
+    //Serial.println(room1LightValue);
+    //Serial.println(room1FanValue);
+    //Serial.println(outdoorLightValue);
+    //Serial.println(gateLightValue);
+    //Serial.println(panicAlarmValue);
+
+
+
+      if(room1LightValue==505){
+          digitalWrite(room1LightPin, HIGH);
+      } else {
+          digitalWrite(room1LightPin, LOW);
+        }
+      if(room1FanValue==605){
+          digitalWrite(room1FanPin, HIGH);
+      } else {
+          digitalWrite(room1FanPin, LOW);
+        }
+      if(outdoorLightValue==705){
+          digitalWrite(outdoorLightPin, HIGH);
+      } else {
+          digitalWrite(outdoorLightPin, LOW);
+        }
+      if(gateLightValue==805){
+          digitalWrite(gateLightPin, HIGH);
+      } else if ((gateLightValue==808)&& (LDR_status==205)) {
+          digitalWrite(gateLightPin, HIGH);
+        } else {
+          digitalWrite(gateLightPin, LOW);
+          }
+      if (panicAlarmValue==905){
+        tone(panicAlarmPin, 3000);
+      } else {
+        noTone(panicAlarmPin);
+      }
+        
+   
+  
+  
+ }
+//----------------------------------------------------end------------------------------------------
